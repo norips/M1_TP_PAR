@@ -7,14 +7,11 @@
 #include <string.h>
 #include <pthread.h>
 
-
-#define NB_THREADS_MAX  20
+#define NB_THREADS_MAX  200
 #define NB_MSG          10
 #define NB_LIGNES_MAX   10
 
-
-pthread_mutex_t mut_screen;
-
+int shared_var = 0;
 /*---------------------------------------------------------------------*/
 /* Afficher un message d'erreur en fonction du code erreur obtenu
 */
@@ -28,24 +25,26 @@ void thdErreur(int codeErr, char *msgErr, void *codeArret) {
   nbMessages de messages a l'ecran, comportant chacun nbLignes lignes
 */
 void *thd_afficher (void *arg) {
-  int i, j, nbLignes,etat;
-  int nbFois = *((int*)arg);
-  for (i = 0; i < nbFois; i++) {
-    nbLignes = rand() % (NB_LIGNES_MAX - 1) + 1;
-    if((etat = pthread_mutex_lock(&mut_screen)) != 0) {
-      thdErreur(etat, "Lock mutex", NULL);
-    }
-    for (j = 0; j < nbLignes; j++) {
-      printf("Thread %lu, Message %d Ligne %d \n",  pthread_self(), i, j);
-      usleep(10);
-    }
-    if((etat = pthread_mutex_unlock(&mut_screen)) != 0) {
-      thdErreur(etat, "Unlock mutex", NULL);
-    }
-    usleep(1000);
+  int i;
+  for(i = 0; i < 100; i++) {
+    printf("Thread %lu : Valeur shared_var = %d\n",pthread_self(),shared_var);
   }
-  /* Se terminer sans renvoyer de compte-rendu */
-  free((int*)arg);
+  pthread_exit((void *)NULL);
+}
+
+void *thd_mod(void *arg) {
+  int i;
+  for(i = 0; i < 100; i++) {
+    shared_var += 1;
+  }
+  pthread_exit((void *)NULL);
+}
+
+void *thd_mod2(void *arg) {
+  int i;
+  for(i = 0; i < 100; i++) {
+    shared_var -= 1;
+  }
   pthread_exit((void *)NULL);
 }
 
@@ -54,11 +53,8 @@ void *thd_afficher (void *arg) {
 
 int main(int argc, char*argv[]) {
   pthread_t idThdAfficheurs[NB_THREADS_MAX];
+  pthread_t idThdModifieurs[NB_THREADS_MAX];
   int i, etat, nbThreads;
-
-  if((etat = pthread_mutex_init(&mut_screen,NULL)) != 0) {
-    thdErreur(etat, "Creation mutex", NULL);
-  }
 
   if (argc != 2) {
     printf("Usage : %s <Nb de threads>\n", argv[0]);
@@ -68,21 +64,36 @@ int main(int argc, char*argv[]) {
   nbThreads = atoi(argv[1]);
   if (nbThreads > NB_THREADS_MAX)
     nbThreads = NB_THREADS_MAX;
+
+  srand(getpid());  /* Initialiser generateur de nombres aleatoires */
+
   /* Lancer les threads afficheurs */
-  for (i = 0; i < nbThreads; i++) {
-    int *p_nbFois = malloc(sizeof(int));
-    *p_nbFois = nbThreads+3-i;
-    if ((etat = pthread_create(&idThdAfficheurs[i], NULL,
-                               thd_afficher, p_nbFois)) != 0)
-      thdErreur(etat, "Creation afficheurs", NULL);
+
+  for (i = 0; i < nbThreads/2; i++) {
+    if ((etat = pthread_create(&idThdModifieurs[i], NULL,
+                               thd_mod, NULL)) != 0)
+      thdErreur(etat, "Creation modifieur", NULL);
   }
+
+  for (i = nbThreads/2; i < nbThreads-1; i++) {
+    if ((etat = pthread_create(&idThdModifieurs[i], NULL,
+                               thd_mod2, NULL)) != 0)
+      thdErreur(etat, "Creation modifieur 2", NULL);
+  }
+  i=0;
+  if ((etat = pthread_create(&idThdAfficheurs[0], NULL,
+                               thd_afficher, NULL)) != 0)
+      thdErreur(etat, "Creation afficheurs", NULL);
 
   /* Attendre la fin des threads afficheur car si le thread principal
     - i.e. le main() - se termine, les threads fils crees meurent aussi */
-  for (i = 0; i < nbThreads; i++)
-    if ((etat = pthread_join(idThdAfficheurs[i], NULL)) != 0)
-      thdErreur(etat, "Join threads afficheurs", NULL);
+  if ((etat = pthread_join(idThdAfficheurs[0], NULL)) != 0)
+    thdErreur(etat, "Join threads afficheurs", NULL);
+  for (i = 0; i < nbThreads-1; i++)
+    if ((etat = pthread_join(idThdModifieurs[i], NULL)) != 0)
+      thdErreur(etat, "Join threads modifieurs", NULL);
 
+  printf("Shared var %d\n",shared_var);
   printf ("\nFin de l'execution du thread principal \n");
   return EXIT_SUCCESS;
 }

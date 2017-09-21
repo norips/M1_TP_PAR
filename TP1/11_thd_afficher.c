@@ -70,4 +70,5 @@ int main(int argc, char*argv[]) {
       thdErreur(etat, "Join threads afficheurs", NULL);
 
   printf ("\nFin de l'execution du thread principal \n");
+  return EXIT_SUCCESS;
 }

@@ -1,7 +1,7 @@
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g 
 LDLIBS = -lpthread
-OBJS = 11_thd_afficher 12_thd_afficher 13_thd_afficher
+OBJS = 11_thd_afficher 12_thd_afficher 13_thd_afficher 21_thd_afficher 22_thd_afficher
 all: $(OBJS)
 
 $(OBJS): %: %.c

@@ -34,15 +34,19 @@ void thdErreur(int codeErr, char *msgErr, void *codeArret) {
 */
 void *thd_afficher (void *arg) {
   p_args *args = ((p_args*)arg);
-  int i, j, nbLignes;
+  int i, j, nbLignes,etat;
   int nbFois = NB_FOIS;
   for (i = 0; i < nbFois; i++) {
     nbLignes = nbFois;
+    if((etat = pthread_mutex_lock(args->mut_screen[0])) != 0) {
+      thdErreur(etat, "Lock mutex", NULL);
+    }
     for (j = 0; j < nbLignes; j++) {
-      pthread_mutex_lock(args->mut_screen[0]);
-      printf("Thread %d, j'affiche %d/%d-%d/%d \n", args->threadNum, i,nbFois, j,nbLignes-1);
-      pthread_mutex_unlock(args->mut_screen[1]);
+      printf("Thread %lu, Message %d Ligne %d \n", pthread_self(), i, j);
       usleep(10);
+    }
+    if((etat = pthread_mutex_unlock(args->mut_screen[1])) != 0) {
+      thdErreur(etat, "Unlock mutex", NULL);
     }
   }
 
@@ -70,22 +74,34 @@ int main(int argc, char*argv[]) {
     nbThreads = NB_THREADS_MAX;
 
   pthread_mutex_t **mut_tmp = malloc(sizeof(pthread_mutex_t*)*(nbThreads+1));
-  for(int i = 0; i < nbThreads+1; i++) {
+  for(i = 0; i < nbThreads+1; i++) {
     mut_tmp[i] = malloc(sizeof(pthread_mutex_t));
-    pthread_mutex_init(mut_tmp[i],NULL);
-    pthread_mutex_lock(mut_tmp[i]);
+    if((etat = pthread_mutex_init(mut_tmp[i],NULL)) != 0)
+      thdErreur(etat, "Init mutex", NULL);
+    if((etat = pthread_mutex_lock(mut_tmp[i])) != 0)
+      thdErreur(etat, "Lock mutex", NULL);
+
+
   }
-  pthread_mutex_destroy(mut_tmp[nbThreads]);
+  if((etat = pthread_mutex_unlock(mut_tmp[nbThreads])) != 0)
+    thdErreur(etat, "Unlock mutex", NULL);
+  if((etat = pthread_mutex_destroy(mut_tmp[nbThreads])) != 0)
+    thdErreur(etat, "Destroy mutex", NULL);
+
+  free(mut_tmp[nbThreads]);
   mut_tmp[nbThreads] = mut_tmp[0];
-  pthread_mutex_unlock(mut_tmp[0]);
+
+  if((etat = pthread_mutex_unlock(mut_tmp[0])) != 0)
+    thdErreur(etat, "Unlock mutex", NULL);
+
 
   /* Lancer les threads afficheurs */
   for (i = 0; i < nbThreads; i++) {
     p_args *p_args_ = malloc(sizeof(p_args));
     p_args_->nbFois = nbThreads+3;
     p_args_->threadNum = i;
-    p_args_->mut_screen[1] = mut_tmp[i];
-    p_args_->mut_screen[0] = mut_tmp[i+1];
+    p_args_->mut_screen[0] = mut_tmp[i];
+    p_args_->mut_screen[1] = mut_tmp[i+1];
 
     if ((etat = pthread_create(&idThdAfficheurs[i], NULL,
                                thd_afficher, p_args_)) != 0)
@@ -97,6 +113,11 @@ int main(int argc, char*argv[]) {
   for (i = 0; i < nbThreads; i++)
     if ((etat = pthread_join(idThdAfficheurs[i], NULL)) != 0)
       thdErreur(etat, "Join threads afficheurs", NULL);
+  for (i = 0; i < nbThreads; i++) {
+    free(mut_tmp[i]);
+    mut_tmp[i] = NULL;
+  }
 
   printf ("\nFin de l'execution du thread principal \n");
+  return EXIT_SUCCESS;
 }
