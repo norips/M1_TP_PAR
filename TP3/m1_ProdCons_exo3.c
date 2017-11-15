@@ -114,6 +114,8 @@ void retrait (TypeMessage *leMessage) {
 
 int ncp = 0;
 int dernierType = 0;
+int nbConsSleeping = 0;
+int nbProdSleeping = 0;
 /*--------------------------------------------------
  * Correspondra au service du moniteur vu en TD
  * La synchronisation sera ajoutee dans cette operation
@@ -121,17 +123,22 @@ int dernierType = 0;
 void deposer (TypeMessage leMessage, int rangProd) {
   pthread_mutex_lock(&mut);
   while(ncp == nbCases || dernierType == leMessage.type ) {
+    nbProdSleeping++;
     pthread_cond_wait(&condP[leMessage.type],&mut);
+    nbProdSleeping--;
   }
   ++ncp;
   depot(leMessage);
-  pthread_cond_signal(&condP[1-leMessage.type]);
+  //pthread_cond_signal(&condP[1-leMessage.type]);
   dernierType = leMessage.type;
 
   printf("\tProd %d : Message a ete depose = [T%d] %s (de %d)\n",
          rangProd, leMessage.type, leMessage.info, leMessage.rangProd);
-  pthread_cond_signal(&condP[1-dernierType]);
-  pthread_cond_signal(&condC);
+  if(nbConsSleeping == 0) {
+    pthread_cond_signal(&condP[1-dernierType]);
+  } else if (ncp != 0) {
+    pthread_cond_signal(&condC);
+  }
   pthread_mutex_unlock(&mut);
 }
 
@@ -142,13 +149,19 @@ void deposer (TypeMessage leMessage, int rangProd) {
 void retirer (TypeMessage *unMessage, int rangConso) {
   pthread_mutex_lock(&mut);
   while(ncp == 0) {
+    nbConsSleeping++;
     pthread_cond_wait(&condC,&mut);
+    nbConsSleeping--;
   }
   --ncp;
   retrait(unMessage);
   printf("\t\tConso %d : Message a ete lu = [T%d] %s (de %d)\n",
          rangConso, unMessage->type, unMessage->info, unMessage->rangProd);
-   pthread_cond_signal(&condP[1-dernierType]);
+   if(nbProdSleeping != 0) {
+     pthread_cond_signal(&condP[1-dernierType]);
+   } else if (nbConsSleeping != 0){
+     pthread_cond_signal(&condC);
+   }
    pthread_mutex_unlock(&mut);
 }
 

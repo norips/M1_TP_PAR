@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <omp.h>
 
 #define MAX_TEXT_LENGTH 100000
 #define MAX_KEY_LENGTH 20
 
+//Set number of threads
+#define NB_THREADS 4
 #define PF_NUMBER 8
 int prime_factors[PF_NUMBER] = {2,3,5,7,11,13,17,19};
 
@@ -55,11 +57,12 @@ int computeKeyLength(char *text){
   int length = strlen(text);
   int *num_facts = malloc((1<<PF_NUMBER) * sizeof(int));
   int nb_dist = 0;
-  for (int i=0; i<(1<<PF_NUMBER) ; i++)
-    num_facts[i] = 0;
-  //This reduce exec time by 40%
-  #pragma omp parallel
+  #pragma omp parallel num_threads(NB_THREADS)
   {
+    #pragma omp for
+    for (int i=0; i<(1<<PF_NUMBER) ; i++)
+      num_facts[i] = 0;
+
     #pragma omp for
     for (int i=0; i<length; i++){
       for (int j=i+1; j<length; j++){
@@ -69,6 +72,7 @@ int computeKeyLength(char *text){
             k++;
           if (k >= 3){
             int fact = encodePrimeFactorization(j-i);
+            #pragma omp atomic
             num_facts[fact] ++;
             break;
           }
@@ -78,7 +82,7 @@ int computeKeyLength(char *text){
   }
 
   int max_num_facts = 0;
-  int most_frequent_fact;
+  int most_frequent_fact = 0;
   for (int i=0; i<(1<<PF_NUMBER) ; i++){
     if (num_facts[i] > max_num_facts){
       max_num_facts = num_facts[i];
@@ -94,12 +98,15 @@ char *computeKey(int key_length, char *text){
   char *key = (char*) malloc(key_length+1 * sizeof(char));
   int text_length = strlen(text);
   int **histogram = (int **) malloc(key_length * sizeof(int *));
-  for (int i=0; i<key_length ; i++){
-    histogram[i] = malloc(26 * sizeof(int));
-    for (int j=0; j<26 ; j++)
-      histogram[i][j] = 0;
-  }
-    #pragma omp parallel for
+  #pragma omp parallel num_threads(NB_THREADS)
+  {
+    #pragma omp for
+    for (int i=0; i<key_length ; i++){
+      histogram[i] = malloc(26 * sizeof(int));
+      for (int j=0; j<26 ; j++)
+        histogram[i][j] = 0;
+    }
+    #pragma omp for
     for (int i=0; i<key_length; i++){
       for (int j=i; j<text_length ; j+=key_length){
         histogram[i][text[j]-'A']++;
@@ -113,6 +120,7 @@ char *computeKey(int key_length, char *text){
         }
       }
       key[i] = (char) (((most_frequent_letter - ('E'-'A') + 26) % 26) + 'A') ;
+    }
   }
   key[key_length] = 0;
   return(key);
@@ -125,10 +133,11 @@ char *decipher(char *ciphertext, char *key){
   int key_length = strlen(key);
 
   char * cleartext = malloc(text_length * sizeof(char));
-  #pragma omp parallel
+  int j = 0;
+  #pragma omp parallel private(j) num_threads(NB_THREADS)
   {
-    int j = 0;
-    #pragma omp for private(j)
+    j=0;
+    #pragma omp for
     for (int i=0; i < text_length; i++){
       cleartext[i] = ((ciphertext[i] -'A' - key[j] + 'A' + 26) % 26) + 'A';
       if (j == key_length-1)
@@ -146,18 +155,45 @@ int main(int argc, char **argv) {
       printf("Usage : vigenere <input file>\n\n");
       return 1;
     }
+    #pragma omp parallel num_threads(NB_THREADS)
+    {
+        #pragma omp single
+        printf("Nb of threads = %d\n",omp_get_num_threads());
+    }
     char *ciphertext = readText(argv[1]);
     printf("---- Ciphertext ----\n");
     printf("%s\n\n",ciphertext);
 
-    printf("---- Key ----\n");
-    int key_length = computeKeyLength(ciphertext);
-    char *key = computeKey(key_length,ciphertext);
-    printf("%s\n\n",key);
 
+    double start, end, t1, t2, t3;
+    double start_all;
+    start_all = omp_get_wtime();
+    start = omp_get_wtime();
+    int key_length = computeKeyLength(ciphertext);
+    end = omp_get_wtime();
+    t1 = end-start;
+
+    start = omp_get_wtime();
+    char *key = computeKey(key_length,ciphertext);
+    end = omp_get_wtime();
+    t2 = end-start;
+
+    start = omp_get_wtime();
     char *cleartext = decipher(ciphertext, key);
+    end = omp_get_wtime();
+    t3 = end-start;
+
+
+    printf("---- Key ----\n");
+    printf("%s\n\n",key);
     printf("---- Cleartext ----\n");
     printf("%s\n\n",cleartext);
+
+    printf("Exec time = %f\n",end-start_all);
+    printf("Exec time computeKeyLength = %f\n",t1);
+    printf("Exec time computeKey = %f\n",t2);
+    printf("Exec time decipher = %f\n",t3);
+
 
   free(ciphertext);
   free(key);

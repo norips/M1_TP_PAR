@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 
 
 #define MAX_TEXT_LENGTH 100000
@@ -143,14 +144,34 @@ int main(int argc, char **argv) {
     printf("---- Ciphertext ----\n");
     printf("%s\n\n",ciphertext);
 
-    printf("---- Key ----\n");
+    double start, end, t1, t2, t3;
+    double start_all;
+    start_all = omp_get_wtime();
+    start = omp_get_wtime();
     int key_length = computeKeyLength(ciphertext);
-    char *key = computeKey(key_length,ciphertext);
-    printf("%s\n\n",key);
+    end = omp_get_wtime();
+    t1 = end-start;
 
+    start = omp_get_wtime();
+    char *key = computeKey(key_length,ciphertext);
+    end = omp_get_wtime();
+    t2 = end-start;
+
+    start = omp_get_wtime();
     char *cleartext = decipher(ciphertext, key);
+    end = omp_get_wtime();
+    t3 = end-start;
+
+
+    printf("---- Key ----\n");
+    printf("%s\n\n",key);
     printf("---- Cleartext ----\n");
     printf("%s\n\n",cleartext);
+
+    printf("Exec time = %f\n",end-start_all);
+    printf("Exec time computeKeyLength = %f\n",t1);
+    printf("Exec time computeKey = %f\n",t2);
+    printf("Exec time decipher = %f\n",t3);
 
   free(ciphertext);
   free(key);

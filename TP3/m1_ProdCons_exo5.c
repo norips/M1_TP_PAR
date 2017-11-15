@@ -50,6 +50,34 @@ pthread_cond_t condC[2];
 int nbProd;
 int nbCons;
 int currentCons;
+volatile int fifoQueue[2][NB_PROD_MAX];
+volatile int head[] = {0,0}, tail[] = {0,0};
+void enqueue(int x,int type){
+  if(head[type] == ((tail[type] + 1) % NB_PROD_MAX)) {
+    printf("ERRORRRRRRR\n");
+    exit(EXIT_FAILURE);
+  }
+  fifoQueue[type][tail[type]] = x;
+  tail[type] = (tail[type]+1)%NB_PROD_MAX;
+}
+
+int dequeue(int type) {
+  if( head[type] == tail[type]){
+    printf("ERRORRRRRRR\n");
+    exit(EXIT_FAILURE);
+  }
+  int res = fifoQueue[type][head[type]];
+  head[type] = (head[type]+1)%NB_PROD_MAX;
+  return res;
+}
+
+int top(int type) {
+  if( head[type] == tail[type]){
+    printf("ERRORRRRRRR\n");
+    exit(EXIT_FAILURE);
+  }
+  return fifoQueue[type][head[type]];
+}
 /*---------------------------------------------------------------------*/
 /* codeErr : code retournee par une primitive
  * msgErr  : message d'erreur personnalise
@@ -74,6 +102,10 @@ void initialiserVarPartagees (void) {
     resCritiques.buffer[i].type = 0;
     resCritiques.buffer[i].rangProd = -1;
   }
+  for(int j = 0; j < 2; j++)
+    for(i = 0; i < NB_PROD_MAX; i++) {
+      fifoQueue[j][i] = -1;
+    }
   nbProd = 0;
   nbCons = 0;
   pthread_cond_init(condC,NULL);
@@ -136,7 +168,6 @@ int dernierType = 0;
 
 
     if(nbCons != 0){
-      printf("Prod %d Signal %d\n",rangProd,leMessage.type);
       pthread_cond_signal(&condC[leMessage.type]);
       pthread_cond_signal(&condC[1-leMessage.type]);
     } else if(ncp != 0) {
@@ -155,9 +186,20 @@ int dernierType = 0;
    while(ncp == 0 || typeMess != type) {
      nbCons++;
      pthread_cond_wait(&condC[type],&mut);
+     //Fifo wake up
+     /*enqueue(rangConso,type);
+     bool end = false;
+     while(!end) {
+       pthread_cond_wait(&condC[type],&mut);
+       if(rangConso == top(type)) {
+         end = true;
+       } else {
+         pthread_cond_signal(&condC[type]);
+       }
+     }
+     dequeue(type);*/
      nbCons--;
      typeMess = resCritiques.buffer[resCritiques.iRetrait].type;
-     printf("Cons %d typemess %d",type,typeMess);
    }
    --ncp;
    retrait(unMessage);

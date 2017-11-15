@@ -1,0 +1,24 @@
+Fonction readText, cette fonction permet de lire le texte, la lecture étant séquentiel, cette fonction ne peut etre parallélisé
+
+Fonction encodePrimeFactorization
+Elle permet d'encoder le parametre number en facteur de nombres premiers
+Cette fonction ne peut etre paralélisé car la variable code est modifié a chaque tour de boucle
+
+Fonction decodePrimeFactorization
+Elle permet de faire l'inverse de la fonction encodePrimeFactorization, a partir de l'encodage en nombre premier elle recréé le nombre
+
+Fonction computeKeyLength
+Elle permet de calculer la longueur de la clé.
+Ligne 58: la boucle for permettant l'initialisation du tableau num_facts peut etre paralélisé
+Ligne 61: la boucle for peut etre parallelisé permettant de découper le texte et de permettre à chaque thread d'analyser le nombre de répétition se trouvant dans sa sous partie par rapport au reste du texte
+les variables sont indépendantes les unes des autres
+Ligne 69: la variable num_facts est partagé entre tous les threads et devra etre modifié de facon atomique
+Ligne 78: cette boucle ne peut etre paralélisé car la variable most_frequent_fact est modifié pour contenir l'indice du nombre le plus présent. Si il n'y avait pas eu cette variable, nous aurions pu utiliser la reduction(max:max_num_facts)
+
+Fonction computeKey
+Ligne 93: On peut paraléliser la boucle for, meme si son nombre d'itération est minime
+Ligne 99: On peut paraléliser la recherche de la clé car histograme ne se base pas sur les valeurs calculé precedemment
+
+
+Focntion decipher
+Ligne 125: On peut paraléliser le déchiffrement car cleartext ne dépende du précédent, il faudra faire attention a créer une variable privé j a chaque thread afin d'indicé correctement la clé 
